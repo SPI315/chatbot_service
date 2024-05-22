@@ -1,0 +1,85 @@
+version: '3.5'
+
+services:
+  api:
+    container_name: api
+    build: ./app/
+    image: event-planner-api:latest
+    ports: 
+      - "8000:8000"
+    env_file: 
+      - .env
+    volumes:
+      - ./app:/app
+    command: python api.py
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_started
+  
+  bot:
+    container_name: bot
+    build: ./app/
+    image: event-planner-api:latest
+    env_file: 
+      - .env
+    volumes:
+      - ./app:/app
+    command: python tg.py
+    restart: always
+    depends_on:
+      - api
+      - rabbitmq
+
+  worker:
+    container_name: worker
+    build: ./app/
+    image: event-planner-api:latest
+    env_file: 
+      - .env
+    volumes:
+      - ./app:/app
+    command: python rmworker_init.py
+    restart: always
+    depends_on:
+      rabbitmq:
+        condition: service_started
+
+  streamlit:
+    container_name: streamlit
+    build: ./app/
+    image: event-planner-api:latest
+    ports: 
+      - "8501:8501"
+    env_file: 
+      - .env
+    volumes:
+      - ./app:/app
+    command: streamlit run streamlit/signin.py
+    restart: always
+    depends_on:
+      - api
+
+  postgres:
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_USER=${POSTGRES_USER}
+    image: postgres:16.2-alpine
+    restart: always
+    
+  rabbitmq:
+    image: rabbitmq:3.13.1-management
+    hostname: rabbitmq
+    restart: always
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RM_USER}
+      - RABBITMQ_DEFAULT_PASS=${RM_PASSWORD}
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit disk_free_limit 2147483648
+    volumes:
+      - ./rabbitmq:/var/lib/rabbitmq
+    ports:
+      - 15672:15672
+      - 5672:5672
